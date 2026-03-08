@@ -302,6 +302,17 @@ const Index = () => {
           </div>
         )}
 
+        {/* Chart toggle */}
+        <div className="flex items-center gap-2">
+          <Switch id="chart-toggle" checked={showChart} onCheckedChange={setShowChart} />
+          <Label htmlFor="chart-toggle" className="flex cursor-pointer items-center gap-1.5 text-sm">
+            <LineChart className="h-4 w-4" />
+            Zobrazit graf
+          </Label>
+        </div>
+
+        {showChart && <DataChart rows={rows} columns={columns} />}
+
         {/* Config */}
         <SamplingConfig
           columns={columns}
