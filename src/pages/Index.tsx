@@ -40,6 +40,7 @@ const Index = () => {
   const [durationMin, setDurationMin] = useState<number | null>(null);
   const [processing, setProcessing] = useState(false);
   const [lastRawText, setLastRawText] = useState<string>("");
+  const [showChart, setShowChart] = useState(false);
 
   // Keep ref in sync with state
   useEffect(() => {
