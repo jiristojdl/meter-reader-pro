@@ -16,7 +16,10 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { Play, Square, Trash2, Download, Sun, Moon, Camera } from "lucide-react";
+import { Play, Square, Trash2, Download, Sun, Moon, Camera, LineChart } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
+import { DataChart } from "@/components/DataChart";
 import { useToast } from "@/hooks/use-toast";
 
 const Index = () => {
