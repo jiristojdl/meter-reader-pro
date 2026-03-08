@@ -10,7 +10,6 @@ import {
   Tooltip,
   ResponsiveContainer,
   Brush,
-  Legend,
 } from "recharts";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
@@ -35,8 +34,8 @@ export function DataChart({ rows, columns }: DataChartProps) {
   const [visibleCols, setVisibleCols] = useState<Set<string>>(
     () => new Set(columns.map((c) => c.id))
   );
+  const [rightAxisCols, setRightAxisCols] = useState<Set<string>>(new Set());
 
-  // Sync visible cols when columns change
   useMemo(() => {
     setVisibleCols((prev) => {
       const next = new Set(prev);
@@ -72,6 +71,19 @@ export function DataChart({ rows, columns }: DataChartProps) {
     });
   };
 
+  const toggleRightAxis = (id: string) => {
+    setRightAxisCols((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const hasRightAxis = useMemo(() => {
+    return columns.some((col) => rightAxisCols.has(col.id) && visibleCols.has(col.id));
+  }, [columns, rightAxisCols, visibleCols]);
+
   if (rows.length === 0) {
     return (
       <div className="flex h-24 items-center justify-center rounded-lg border border-border bg-card text-sm text-muted-foreground">
@@ -82,27 +94,43 @@ export function DataChart({ rows, columns }: DataChartProps) {
 
   return (
     <div className="space-y-3">
-      {/* Column visibility checkboxes */}
-      <div className="flex flex-wrap gap-3">
-        {columns.map((col, i) => (
-          <div key={col.id} className="flex items-center gap-1.5">
-            <Checkbox
-              id={`chart-col-${col.id}`}
-              checked={visibleCols.has(col.id)}
-              onCheckedChange={() => toggleCol(col.id)}
-            />
-            <Label
-              htmlFor={`chart-col-${col.id}`}
-              className="cursor-pointer text-xs font-mono"
-              style={{ color: COLORS[i % COLORS.length] }}
-            >
-              {col.name}
-            </Label>
-          </div>
-        ))}
+      <div className="flex flex-wrap gap-4">
+        {columns.map((col, i) => {
+          const isFirst = i === 0;
+          const isVisible = visibleCols.has(col.id);
+          const isRight = rightAxisCols.has(col.id);
+          return (
+            <div key={col.id} className="flex items-center gap-1.5">
+              <Checkbox
+                id={`chart-col-${col.id}`}
+                checked={isVisible}
+                onCheckedChange={() => toggleCol(col.id)}
+              />
+              <Label
+                htmlFor={`chart-col-${col.id}`}
+                className="cursor-pointer text-xs font-mono"
+                style={{ color: COLORS[i % COLORS.length] }}
+              >
+                {col.name}
+              </Label>
+              {!isFirst && isVisible && (
+                <button
+                  onClick={() => toggleRightAxis(col.id)}
+                  className={`ml-1 rounded px-1.5 py-0.5 text-[10px] font-medium border transition-colors ${
+                    isRight
+                      ? "bg-primary text-primary-foreground border-primary"
+                      : "bg-muted text-muted-foreground border-border hover:border-primary/50"
+                  }`}
+                  title={isRight ? "Přesunout na levou osu Y" : "Přesunout na pravou osu Y"}
+                >
+                  {isRight ? "R" : "L"}
+                </button>
+              )}
+            </div>
+          );
+        })}
       </div>
 
-      {/* Chart */}
       <div className="h-[300px] rounded-lg border border-border bg-card p-2">
         <ResponsiveContainer width="100%" height="100%">
           <LineChart data={chartData}>
@@ -113,10 +141,20 @@ export function DataChart({ rows, columns }: DataChartProps) {
               stroke="hsl(var(--border))"
             />
             <YAxis
+              yAxisId="left"
               tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }}
               stroke="hsl(var(--border))"
               domain={["auto", "auto"]}
             />
+            {hasRightAxis && (
+              <YAxis
+                yAxisId="right"
+                orientation="right"
+                tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }}
+                stroke="hsl(var(--border))"
+                domain={["auto", "auto"]}
+              />
+            )}
             <Tooltip
               contentStyle={{
                 backgroundColor: "hsl(var(--card))",
@@ -133,6 +171,7 @@ export function DataChart({ rows, columns }: DataChartProps) {
                   type="monotone"
                   dataKey={col.id}
                   name={col.name}
+                  yAxisId={rightAxisCols.has(col.id) ? "right" : "left"}
                   stroke={COLORS[i % COLORS.length]}
                   strokeWidth={2}
                   dot={{ r: 3 }}
