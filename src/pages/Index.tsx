@@ -55,6 +55,24 @@ const Index = () => {
 
       setLastRawText(result.raw_text || "");
 
+      // Auto-create columns for extra readings detected by AI
+      const extraReadings = result.extra_readings || {};
+      const extraNames = Object.keys(extraReadings);
+      let currentColumns = columns;
+
+      if (extraNames.length > 0) {
+        const newCols: ColumnConfig[] = [];
+        for (const name of extraNames) {
+          if (!currentColumns.some((c) => c.name === name)) {
+            newCols.push({ id: crypto.randomUUID(), name });
+          }
+        }
+        if (newCols.length > 0) {
+          currentColumns = [...currentColumns, ...newCols];
+          setColumns(currentColumns);
+        }
+      }
+
       const newRow: DataRow = {
         id: crypto.randomUUID(),
         timestamp: new Date(),
@@ -62,8 +80,8 @@ const Index = () => {
       };
 
       // Map AI readings to columns by name
-      for (const col of columns) {
-        const reading = result.readings[col.name];
+      for (const col of currentColumns) {
+        const reading = result.readings[col.name] || extraReadings[col.name];
         if (reading) {
           newRow.values[col.id] = {
             value: reading.value,
