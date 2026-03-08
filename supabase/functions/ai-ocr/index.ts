@@ -39,6 +39,7 @@ Your task:
 2. Identify units (V, A, °C, kg, mA, kV, mV, W, kW, Ω, Hz, %, etc.)
 3. Assign each reading to the most appropriate column based on the column name and the unit/context
 4. If a column has no matching reading, use null
+5. If you see MORE values on the display than there are defined columns, include ALL extra values as additional keys in "readings" using a descriptive name (e.g. "Napětí", "Proud", "Teplota", or the label visible on the display)
 
 IMPORTANT: Respond ONLY with valid JSON, no markdown, no explanation. Use this exact format:
 {
@@ -46,11 +47,15 @@ IMPORTANT: Respond ONLY with valid JSON, no markdown, no explanation. Use this e
     "<column_name>": { "value": "<number>", "unit": "<unit>" },
     ...
   },
+  "extra_readings": {
+    "<descriptive_name>": { "value": "<number>", "unit": "<unit>" },
+    ...
+  },
   "raw_text": "<everything you can read from the image>"
 }
 
 If you cannot read anything, respond with:
-{ "readings": {}, "raw_text": "" }`;
+{ "readings": {}, "extra_readings": {}, "raw_text": "" }`;
 
     const response = await fetch(
       "https://ai.gateway.lovable.dev/v1/chat/completions",

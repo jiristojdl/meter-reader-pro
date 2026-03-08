@@ -161,37 +161,7 @@ const Index = () => {
         {/* Camera */}
         <CameraPreview videoRef={videoRef} onSnapshot={() => null} />
 
-        {/* Status indicator */}
-        {(running || processing) && (
-          <div className="flex items-center gap-2 text-xs text-primary">
-            <div className="h-2 w-2 animate-pulse rounded-full bg-primary" />
-            <span className="font-mono">
-              {running ? `Měření probíhá... (${rows.length} záznamů)` : ""}
-              {processing && " • AI zpracovává snímek..."}
-            </span>
-          </div>
-        )}
-
-        {/* Last raw text from AI */}
-        {lastRawText && (
-          <div className="rounded-md border border-border bg-surface p-3">
-            <p className="mb-1 text-xs font-medium text-muted-foreground">Rozpoznaný text (AI)</p>
-            <p className="font-mono text-sm text-foreground">{lastRawText}</p>
-          </div>
-        )}
-
-        {/* Config */}
-        <SamplingConfig
-          columns={columns}
-          onColumnsChange={setColumns}
-          intervalSec={intervalSec}
-          onIntervalChange={setIntervalSec}
-          durationMin={durationMin}
-          onDurationChange={setDurationMin}
-          disabled={running}
-        />
-
-        {/* Controls */}
+        {/* Controls - right below camera */}
         <div className="flex gap-2">
           {!running ? (
             <Button onClick={startSampling} className="flex-1 gap-2">
@@ -240,6 +210,36 @@ const Index = () => {
             </AlertDialogContent>
           </AlertDialog>
         </div>
+
+        {/* Status indicator */}
+        {(running || processing) && (
+          <div className="flex items-center gap-2 text-xs text-primary">
+            <div className="h-2 w-2 animate-pulse rounded-full bg-primary" />
+            <span className="font-mono">
+              {running ? `Měření probíhá... (${rows.length} záznamů)` : ""}
+              {processing && " • AI zpracovává snímek..."}
+            </span>
+          </div>
+        )}
+
+        {/* Last raw text from AI */}
+        {lastRawText && (
+          <div className="rounded-md border border-border bg-surface p-3">
+            <p className="mb-1 text-xs font-medium text-muted-foreground">Rozpoznaný text (AI)</p>
+            <p className="font-mono text-sm text-foreground">{lastRawText}</p>
+          </div>
+        )}
+
+        {/* Config */}
+        <SamplingConfig
+          columns={columns}
+          onColumnsChange={setColumns}
+          intervalSec={intervalSec}
+          onIntervalChange={setIntervalSec}
+          durationMin={durationMin}
+          onDurationChange={setDurationMin}
+          disabled={running}
+        />
 
         {/* Data Table */}
         <DataTable rows={rows} columns={columns} />
