@@ -1,49 +1,49 @@
-import Tesseract from "tesseract.js";
+import { ColumnConfig } from "./data";
+import { supabase } from "@/integrations/supabase/client";
 
-const UNIT_PATTERNS = /(V|A|°C|℃|kg|mA|kV|mV|W|kW|Ω|kΩ|MΩ|Hz|kHz|MHz|%)\s*$/i;
-
-export interface OcrResult {
-  raw: string;
-  value: string;
-  unit: string;
-}
-
-export async function performOcr(canvas: HTMLCanvasElement): Promise<OcrResult> {
-  const { data } = await Tesseract.recognize(canvas, "eng", {
-    logger: () => {},
-  });
-
-  const raw = data.text.trim();
-  // Try to extract a number and unit
-  // Clean OCR artifacts, keep digits, dots, minus, and letters for unit
-  const cleaned = raw.replace(/[^0-9.\-a-zA-Z°℃%Ω]/g, " ").trim();
-
-  // Find the best numeric match
-  const numMatch = cleaned.match(/-?\d+\.?\d*/);
-  const value = numMatch ? numMatch[0] : raw;
-
-  // Try to find unit after the number
-  const afterNum = numMatch ? cleaned.slice((numMatch.index ?? 0) + numMatch[0].length).trim() : "";
-  const unitMatch = afterNum.match(UNIT_PATTERNS);
-  const unit = unitMatch ? unitMatch[1] : "";
-
-  return { raw, value, unit };
+export interface AiOcrResult {
+  readings: Record<string, { value: string; unit: string }>;
+  raw_text: string;
 }
 
 export function captureFrame(
   video: HTMLVideoElement,
-  regionWidth = 320,
-  regionHeight = 80
+  regionWidth = 480,
+  regionHeight = 160
 ): HTMLCanvasElement {
   const canvas = document.createElement("canvas");
   canvas.width = regionWidth;
   canvas.height = regionHeight;
   const ctx = canvas.getContext("2d")!;
 
-  // Capture from center of video
-  const sx = (video.videoWidth - regionWidth) / 2;
-  const sy = (video.videoHeight - regionHeight) / 2;
+  const sx = Math.max(0, (video.videoWidth - regionWidth) / 2);
+  const sy = Math.max(0, (video.videoHeight - regionHeight) / 2);
+  const sw = Math.min(regionWidth, video.videoWidth);
+  const sh = Math.min(regionHeight, video.videoHeight);
 
-  ctx.drawImage(video, sx, sy, regionWidth, regionHeight, 0, 0, regionWidth, regionHeight);
+  ctx.drawImage(video, sx, sy, sw, sh, 0, 0, regionWidth, regionHeight);
   return canvas;
+}
+
+export function canvasToBase64(canvas: HTMLCanvasElement): string {
+  return canvas.toDataURL("image/png").split(",")[1];
+}
+
+export async function performAiOcr(
+  imageBase64: string,
+  columns: ColumnConfig[]
+): Promise<AiOcrResult> {
+  const { data, error } = await supabase.functions.invoke("ai-ocr", {
+    body: { imageBase64, columns },
+  });
+
+  if (error) {
+    throw new Error(error.message || "AI OCR failed");
+  }
+
+  if (data?.error) {
+    throw new Error(data.error);
+  }
+
+  return data as AiOcrResult;
 }

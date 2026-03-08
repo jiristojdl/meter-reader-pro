@@ -3,7 +3,7 @@ import { CameraPreview } from "@/components/CameraPreview";
 import { DataTable } from "@/components/DataTable";
 import { SamplingConfig } from "@/components/SamplingConfig";
 import { DataRow, ColumnConfig, exportToCsv } from "@/lib/data";
-import { performOcr, captureFrame } from "@/lib/ocr";
+import { captureFrame, canvasToBase64, performAiOcr } from "@/lib/ocr";
 import { Button } from "@/components/ui/button";
 import {
   AlertDialog,
@@ -17,11 +17,13 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Play, Square, Trash2, Download, Sun, Moon, Camera } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
 
 const Index = () => {
   const videoRef = useRef<HTMLVideoElement>(null!);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const startTimeRef = useRef<number>(0);
+  const { toast } = useToast();
 
   const [darkMode, setDarkMode] = useState(true);
   const [running, setRunning] = useState(false);
@@ -32,13 +34,12 @@ const Index = () => {
   const [intervalSec, setIntervalSec] = useState(5);
   const [durationMin, setDurationMin] = useState<number | null>(null);
   const [processing, setProcessing] = useState(false);
+  const [lastRawText, setLastRawText] = useState<string>("");
 
-  // Toggle dark mode
   useEffect(() => {
     document.documentElement.classList.toggle("dark", darkMode);
   }, [darkMode]);
 
-  // Init dark mode
   useEffect(() => {
     document.documentElement.classList.add("dark");
   }, []);
@@ -49,7 +50,10 @@ const Index = () => {
 
     try {
       const canvas = captureFrame(videoRef.current);
-      const result = await performOcr(canvas);
+      const imageBase64 = canvasToBase64(canvas);
+      const result = await performAiOcr(imageBase64, columns);
+
+      setLastRawText(result.raw_text || "");
 
       const newRow: DataRow = {
         id: crypto.randomUUID(),
@@ -57,31 +61,36 @@ const Index = () => {
         values: {},
       };
 
-      // For now, assign OCR result to the first column
-      if (columns.length > 0) {
-        newRow.values[columns[0].id] = {
-          value: result.value,
-          unit: result.unit,
-        };
+      // Map AI readings to columns by name
+      for (const col of columns) {
+        const reading = result.readings[col.name];
+        if (reading) {
+          newRow.values[col.id] = {
+            value: reading.value,
+            unit: reading.unit || "",
+          };
+        }
       }
 
       setRows((prev) => [...prev, newRow]);
-    } catch (e) {
-      console.error("OCR error:", e);
+    } catch (e: any) {
+      console.error("AI OCR error:", e);
+      toast({
+        title: "Chyba AI rozpoznávání",
+        description: e.message || "Nepodařilo se rozpoznat text",
+        variant: "destructive",
+      });
     } finally {
       setProcessing(false);
     }
-  }, [columns]);
+  }, [columns, toast]);
 
   const startSampling = useCallback(() => {
     setRunning(true);
     startTimeRef.current = Date.now();
-
-    // Take first measurement immediately
     takeMeasurement();
 
     timerRef.current = setInterval(() => {
-      // Check duration
       if (durationMin !== null) {
         const elapsed = (Date.now() - startTimeRef.current) / 1000 / 60;
         if (elapsed >= durationMin) {
@@ -135,13 +144,21 @@ const Index = () => {
         <CameraPreview videoRef={videoRef} onSnapshot={() => null} />
 
         {/* Status indicator */}
-        {running && (
+        {(running || processing) && (
           <div className="flex items-center gap-2 text-xs text-primary">
             <div className="h-2 w-2 animate-pulse rounded-full bg-primary" />
             <span className="font-mono">
-              Měření probíhá... ({rows.length} záznamů)
-              {processing && " • Zpracování..."}
+              {running ? `Měření probíhá... (${rows.length} záznamů)` : ""}
+              {processing && " • AI zpracovává snímek..."}
             </span>
+          </div>
+        )}
+
+        {/* Last raw text from AI */}
+        {lastRawText && (
+          <div className="rounded-md border border-border bg-surface p-3">
+            <p className="mb-1 text-xs font-medium text-muted-foreground">Rozpoznaný text (AI)</p>
+            <p className="font-mono text-sm text-foreground">{lastRawText}</p>
           </div>
         )}
 
