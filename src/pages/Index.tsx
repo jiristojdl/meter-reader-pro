@@ -3,7 +3,7 @@ import { CameraPreview } from "@/components/CameraPreview";
 import { DataTable } from "@/components/DataTable";
 import { SamplingConfig } from "@/components/SamplingConfig";
 import { DataRow, ColumnConfig, exportToCsv } from "@/lib/data";
-import { captureFrame, canvasToBase64, performAiOcr } from "@/lib/ocr";
+import { captureFrame, canvasToBase64, performCalibration, performMeasurement } from "@/lib/ocr";
 import { Button } from "@/components/ui/button";
 import {
   AlertDialog,
@@ -23,10 +23,12 @@ const Index = () => {
   const videoRef = useRef<HTMLVideoElement>(null!);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const startTimeRef = useRef<number>(0);
+  const columnsRef = useRef<ColumnConfig[]>([]);
   const { toast } = useToast();
 
   const [darkMode, setDarkMode] = useState(true);
   const [running, setRunning] = useState(false);
+  const [calibrating, setCalibrating] = useState(false);
   const [rows, setRows] = useState<DataRow[]>([]);
   const [columns, setColumns] = useState<ColumnConfig[]>([
     { id: crypto.randomUUID(), name: "Hodnota" },
@@ -35,6 +37,11 @@ const Index = () => {
   const [durationMin, setDurationMin] = useState<number | null>(null);
   const [processing, setProcessing] = useState(false);
   const [lastRawText, setLastRawText] = useState<string>("");
+
+  // Keep ref in sync with state
+  useEffect(() => {
+    columnsRef.current = columns;
+  }, [columns]);
 
   useEffect(() => {
     document.documentElement.classList.toggle("dark", darkMode);
@@ -51,37 +58,19 @@ const Index = () => {
     try {
       const canvas = captureFrame(videoRef.current);
       const imageBase64 = canvasToBase64(canvas);
-      const result = await performAiOcr(imageBase64, columns);
+      const result = await performMeasurement(imageBase64, columnsRef.current);
 
       setLastRawText(result.raw_text || "");
-
-      // Auto-create columns for extra readings detected by AI
-      const extraReadings = result.extra_readings || {};
-      const extraNames = Object.keys(extraReadings);
-      let currentColumns = columns;
-
-      if (extraNames.length > 0) {
-        const newCols: ColumnConfig[] = [];
-        for (const name of extraNames) {
-          if (!currentColumns.some((c) => c.name === name)) {
-            newCols.push({ id: crypto.randomUUID(), name });
-          }
-        }
-        if (newCols.length > 0) {
-          currentColumns = [...currentColumns, ...newCols];
-          setColumns(currentColumns);
-        }
-      }
 
       const newRow: DataRow = {
         id: crypto.randomUUID(),
         timestamp: new Date(),
         values: {},
+        rawText: result.raw_text || "",
       };
 
-      // Map AI readings to columns by name
-      for (const col of currentColumns) {
-        const reading = result.readings[col.name] || extraReadings[col.name];
+      for (const col of columnsRef.current) {
+        const reading = result.readings[col.name];
         if (reading) {
           newRow.values[col.id] = {
             value: reading.value,
@@ -101,12 +90,87 @@ const Index = () => {
     } finally {
       setProcessing(false);
     }
-  }, [columns, toast]);
+  }, [toast]);
 
-  const startSampling = useCallback(() => {
+  const startSampling = useCallback(async () => {
+    if (!videoRef.current || videoRef.current.readyState < 2) {
+      toast({
+        title: "Kamera není připravena",
+        description: "Počkejte na inicializaci kamery",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Step 1: Calibration - analyze first frame to create columns
+    setCalibrating(true);
+    setProcessing(true);
+
+    try {
+      const canvas = captureFrame(videoRef.current);
+      const imageBase64 = canvasToBase64(canvas);
+      const calibResult = await performCalibration(imageBase64);
+
+      if (calibResult.columns.length === 0) {
+        toast({
+          title: "Žádné hodnoty nenalezeny",
+          description: "AI nenašla žádné hodnoty na displeji. Zkuste upravit záběr.",
+          variant: "destructive",
+        });
+        setCalibrating(false);
+        setProcessing(false);
+        return;
+      }
+
+      // Create columns from calibration
+      const newColumns: ColumnConfig[] = calibResult.columns.map((c) => ({
+        id: crypto.randomUUID(),
+        name: c.name,
+      }));
+      setColumns(newColumns);
+      columnsRef.current = newColumns;
+
+      // Save first measurement
+      const firstRow: DataRow = {
+        id: crypto.randomUUID(),
+        timestamp: new Date(),
+        values: {},
+        rawText: calibResult.raw_text || "",
+      };
+
+      for (let i = 0; i < calibResult.columns.length; i++) {
+        const col = calibResult.columns[i];
+        firstRow.values[newColumns[i].id] = {
+          value: col.value,
+          unit: col.unit || "",
+        };
+      }
+
+      setRows((prev) => [...prev, firstRow]);
+      setLastRawText(calibResult.raw_text || "");
+
+      toast({
+        title: "Kalibrace dokončena",
+        description: `Nalezeno ${calibResult.columns.length} hodnot: ${calibResult.columns.map((c) => c.name).join(", ")}`,
+      });
+    } catch (e: any) {
+      console.error("Calibration error:", e);
+      toast({
+        title: "Chyba kalibrace",
+        description: e.message || "Nepodařilo se analyzovat displej",
+        variant: "destructive",
+      });
+      setCalibrating(false);
+      setProcessing(false);
+      return;
+    }
+
+    setCalibrating(false);
+    setProcessing(false);
+
+    // Step 2: Start periodic measurements
     setRunning(true);
     startTimeRef.current = Date.now();
-    takeMeasurement();
 
     timerRef.current = setInterval(() => {
       if (durationMin !== null) {
@@ -118,7 +182,7 @@ const Index = () => {
       }
       takeMeasurement();
     }, intervalSec * 1000);
-  }, [intervalSec, durationMin, takeMeasurement]);
+  }, [intervalSec, durationMin, takeMeasurement, toast]);
 
   const stopSampling = useCallback(() => {
     setRunning(false);
@@ -161,15 +225,15 @@ const Index = () => {
         {/* Camera */}
         <CameraPreview videoRef={videoRef} onSnapshot={() => null} />
 
-        {/* Controls - right below camera */}
+        {/* Controls */}
         <div className="flex gap-2">
-          {!running ? (
+          {!running && !calibrating ? (
             <Button onClick={startSampling} className="flex-1 gap-2">
               <Play className="h-4 w-4" />
               Start
             </Button>
           ) : (
-            <Button onClick={stopSampling} variant="destructive" className="flex-1 gap-2">
+            <Button onClick={stopSampling} variant="destructive" className="flex-1 gap-2" disabled={calibrating}>
               <Square className="h-4 w-4" />
               Stop
             </Button>
@@ -212,19 +276,23 @@ const Index = () => {
         </div>
 
         {/* Status indicator */}
-        {(running || processing) && (
+        {(calibrating || running || processing) && (
           <div className="flex items-center gap-2 text-xs text-primary">
             <div className="h-2 w-2 animate-pulse rounded-full bg-primary" />
             <span className="font-mono">
-              {running ? `Měření probíhá... (${rows.length} záznamů)` : ""}
-              {processing && " • AI zpracovává snímek..."}
+              {calibrating
+                ? "Kalibrace – AI analyzuje displej..."
+                : running
+                  ? `Měření probíhá... (${rows.length} záznamů)`
+                  : ""}
+              {processing && !calibrating && " • AI zpracovává snímek..."}
             </span>
           </div>
         )}
 
         {/* Last raw text from AI */}
         {lastRawText && (
-          <div className="rounded-md border border-border bg-surface p-3">
+          <div className="rounded-md border border-border bg-muted p-3">
             <p className="mb-1 text-xs font-medium text-muted-foreground">Rozpoznaný text (AI)</p>
             <p className="font-mono text-sm text-foreground">{lastRawText}</p>
           </div>
