@@ -1,9 +1,13 @@
 import { ColumnConfig } from "./data";
 import { supabase } from "@/integrations/supabase/client";
 
-export interface AiOcrResult {
+export interface CalibrationResult {
+  columns: { name: string; value: string; unit: string }[];
+  raw_text: string;
+}
+
+export interface MeasurementResult {
   readings: Record<string, { value: string; unit: string }>;
-  extra_readings?: Record<string, { value: string; unit: string }>;
   raw_text: string;
 }
 
@@ -30,21 +34,29 @@ export function canvasToBase64(canvas: HTMLCanvasElement): string {
   return canvas.toDataURL("image/png").split(",")[1];
 }
 
-export async function performAiOcr(
-  imageBase64: string,
-  columns: ColumnConfig[]
-): Promise<AiOcrResult> {
+export async function performCalibration(
+  imageBase64: string
+): Promise<CalibrationResult> {
   const { data, error } = await supabase.functions.invoke("ai-ocr", {
-    body: { imageBase64, columns },
+    body: { imageBase64, columns: [], mode: "calibrate" },
   });
 
-  if (error) {
-    throw new Error(error.message || "AI OCR failed");
-  }
+  if (error) throw new Error(error.message || "Calibration failed");
+  if (data?.error) throw new Error(data.error);
 
-  if (data?.error) {
-    throw new Error(data.error);
-  }
+  return data as CalibrationResult;
+}
 
-  return data as AiOcrResult;
+export async function performMeasurement(
+  imageBase64: string,
+  columns: ColumnConfig[]
+): Promise<MeasurementResult> {
+  const { data, error } = await supabase.functions.invoke("ai-ocr", {
+    body: { imageBase64, columns, mode: "measure" },
+  });
+
+  if (error) throw new Error(error.message || "Measurement failed");
+  if (data?.error) throw new Error(data.error);
+
+  return data as MeasurementResult;
 }

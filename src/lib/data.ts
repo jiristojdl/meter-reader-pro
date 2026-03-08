@@ -4,6 +4,7 @@ export interface DataRow {
   id: string;
   timestamp: Date;
   values: Record<string, { value: string; unit: string }>;
+  rawText?: string;
 }
 
 export interface ColumnConfig {
@@ -12,14 +13,15 @@ export interface ColumnConfig {
 }
 
 export function exportToCsv(rows: DataRow[], columns: ColumnConfig[]): void {
-  const header = ["Timestamp", ...columns.map((c) => `${c.name} (Value)`), ...columns.map((c) => `${c.name} (Unit)`)];
+  const header = ["Timestamp", ...columns.map((c) => `${c.name} (Value)`), ...columns.map((c) => `${c.name} (Unit)`), "Raw Text"];
   const csvRows = [header.join(",")];
 
   for (const row of rows) {
     const ts = format(row.timestamp, "yyyy-MM-dd HH:mm:ss");
     const values = columns.map((c) => row.values[c.id]?.value ?? "");
     const units = columns.map((c) => row.values[c.id]?.unit ?? "");
-    csvRows.push([ts, ...values, ...units].join(","));
+    const rawText = `"${(row.rawText || "").replace(/"/g, '""')}"`;
+    csvRows.push([ts, ...values, ...units, rawText].join(","));
   }
 
   const blob = new Blob([csvRows.join("\n")], { type: "text/csv" });
