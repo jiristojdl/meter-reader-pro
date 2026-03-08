@@ -15,7 +15,7 @@ serve(async (req) => {
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
 
-    const { imageBase64, columns } = await req.json();
+    const { imageBase64, columns, mode } = await req.json();
 
     if (!imageBase64) {
       return new Response(JSON.stringify({ error: "No image provided" }), {
@@ -24,22 +24,50 @@ serve(async (req) => {
       });
     }
 
-    // Build column description for the prompt
     const columnNames = (columns as { id: string; name: string }[])
       .map((c) => c.name)
       .join(", ");
 
-    const systemPrompt = `You are an OCR and data extraction assistant for reading instrument displays and meters.
+    let systemPrompt: string;
+
+    if (mode === "calibrate") {
+      // Calibration mode: discover all values and suggest column names
+      systemPrompt = `You are an OCR and data extraction assistant for reading instrument displays and meters.
+You receive a photo of a display/meter and must extract ALL numeric readings visible.
+
+Your task:
+1. Read ALL visible numbers, text and labels from the image
+2. Identify units (V, A, °C, kg, mA, kV, mV, W, kW, Ω, Hz, %, bar, Pa, psi, rpm, etc.)
+3. For EACH distinct value you find, create a descriptive column name based on the label visible on the display, the unit, or context (e.g. "Napětí [V]", "Proud [A]", "Teplota [°C]", "Tlak [bar]")
+4. If there is a label/text near the value on the display, use that as the column name
+5. If no label is visible, use the unit to create a name (e.g. value in V → "Napětí [V]")
+
+IMPORTANT: Respond ONLY with valid JSON, no markdown, no explanation. Use this exact format:
+{
+  "columns": [
+    { "name": "<descriptive_name>", "value": "<number>", "unit": "<unit>" }
+  ],
+  "raw_text": "<everything you can read from the image>"
+}
+
+If you cannot read anything, respond with:
+{ "columns": [], "raw_text": "" }`;
+    } else {
+      // Measurement mode: match values to existing columns
+      systemPrompt = `You are an OCR and data extraction assistant for reading instrument displays and meters.
 You receive a photo of a display/meter and must extract numeric readings.
 
-The user has defined these data columns: ${columnNames}
+The user has these FIXED columns: ${columnNames}
 
 Your task:
 1. Read ALL visible numbers and text from the image
-2. Identify units (V, A, °C, kg, mA, kV, mV, W, kW, Ω, Hz, %, etc.)
-3. Assign each reading to the most appropriate column based on the column name and the unit/context
-4. If a column has no matching reading, use null
-5. If you see MORE values on the display than there are defined columns, include ALL extra values as additional keys in "readings" using a descriptive name (e.g. "Napětí", "Proud", "Teplota", or the label visible on the display)
+2. Identify units (V, A, °C, kg, mA, kV, mV, W, kW, Ω, Hz, %, bar, Pa, psi, rpm, etc.)
+3. Match each reading to the MOST APPROPRIATE existing column by comparing:
+   - The unit in the column name vs the unit of the reading
+   - The label/context of the reading vs the column name
+   - The magnitude/range similarity to previous readings for that column
+4. Do NOT create new columns. Only fill the existing ones.
+5. If a column has no matching reading, use null
 
 IMPORTANT: Respond ONLY with valid JSON, no markdown, no explanation. Use this exact format:
 {
@@ -47,15 +75,12 @@ IMPORTANT: Respond ONLY with valid JSON, no markdown, no explanation. Use this e
     "<column_name>": { "value": "<number>", "unit": "<unit>" },
     ...
   },
-  "extra_readings": {
-    "<descriptive_name>": { "value": "<number>", "unit": "<unit>" },
-    ...
-  },
   "raw_text": "<everything you can read from the image>"
 }
 
 If you cannot read anything, respond with:
-{ "readings": {}, "extra_readings": {}, "raw_text": "" }`;
+{ "readings": {}, "raw_text": "" }`;
+    }
 
     const response = await fetch(
       "https://ai.gateway.lovable.dev/v1/chat/completions",
@@ -74,7 +99,9 @@ If you cannot read anything, respond with:
               content: [
                 {
                   type: "text",
-                  text: `Read the display values from this image. Columns: ${columnNames}`,
+                  text: mode === "calibrate"
+                    ? "Analyze this display image. Find ALL values and suggest column names for each."
+                    : `Read the display values from this image and match them to these columns: ${columnNames}`,
                 },
                 {
                   type: "image_url",
@@ -113,15 +140,15 @@ If you cannot read anything, respond with:
     const aiData = await response.json();
     const content = aiData.choices?.[0]?.message?.content ?? "";
 
-    // Parse the JSON response from AI
     let parsed;
     try {
-      // Strip markdown code fences if present
       const jsonStr = content.replace(/```json?\s*/g, "").replace(/```/g, "").trim();
       parsed = JSON.parse(jsonStr);
     } catch {
       console.error("Failed to parse AI response:", content);
-      parsed = { readings: {}, raw_text: content };
+      parsed = mode === "calibrate"
+        ? { columns: [], raw_text: content }
+        : { readings: {}, raw_text: content };
     }
 
     return new Response(JSON.stringify(parsed), {
