@@ -4,6 +4,7 @@ export interface DataRow {
   id: string;
   timestamp: Date;
   values: Record<string, { value: string; unit: string }>;
+  rawText?: string;
 }
 
 export interface ColumnConfig {
