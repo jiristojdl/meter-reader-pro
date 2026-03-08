@@ -1,5 +1,7 @@
 import { useState, useRef, useCallback, useEffect } from "react";
+import { Link } from "react-router-dom";
 import { CameraPreview } from "@/components/CameraPreview";
+import { LandingHero } from "@/components/LandingHero";
 import { DataTable } from "@/components/DataTable";
 import { SamplingConfig } from "@/components/SamplingConfig";
 import { DataRow, ColumnConfig, exportToCsv } from "@/lib/data";
@@ -16,11 +18,12 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { Play, Square, Trash2, Download, Sun, Moon, Camera, LineChart } from "lucide-react";
+import { Play, Square, Trash2, Download, Sun, Moon, Camera, LineChart, Info, LogOut } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { DataChart } from "@/components/DataChart";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/useAuth";
 
 const Index = () => {
   const videoRef = useRef<HTMLVideoElement>(null!);
@@ -28,6 +31,7 @@ const Index = () => {
   const startTimeRef = useRef<number>(0);
   const columnsRef = useRef<ColumnConfig[]>([]);
   const { toast } = useToast();
+  const { user, loading, signOut } = useAuth();
 
   const [darkMode, setDarkMode] = useState(true);
   const [running, setRunning] = useState(false);
@@ -42,7 +46,6 @@ const Index = () => {
   const [lastRawText, setLastRawText] = useState<string>("");
   const [showChart, setShowChart] = useState(false);
 
-  // Keep ref in sync with state
   useEffect(() => {
     columnsRef.current = columns;
   }, [columns]);
@@ -106,7 +109,6 @@ const Index = () => {
       return;
     }
 
-    // Step 1: Calibration - analyze first frame to create columns
     setCalibrating(true);
     setProcessing(true);
 
@@ -126,7 +128,6 @@ const Index = () => {
         return;
       }
 
-      // Create columns from calibration
       const newColumns: ColumnConfig[] = calibResult.columns.map((c) => ({
         id: crypto.randomUUID(),
         name: c.name,
@@ -134,7 +135,6 @@ const Index = () => {
       setColumns(newColumns);
       columnsRef.current = newColumns;
 
-      // Save first measurement
       const firstRow: DataRow = {
         id: crypto.randomUUID(),
         timestamp: new Date(),
@@ -172,7 +172,6 @@ const Index = () => {
     setCalibrating(false);
     setProcessing(false);
 
-    // Step 2: Start periodic measurements
     setRunning(true);
     startTimeRef.current = Date.now();
 
@@ -202,6 +201,14 @@ const Index = () => {
     };
   }, []);
 
+  if (loading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background">
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+      </div>
+    );
+  }
+
   return (
     <div className="flex min-h-screen flex-col bg-background">
       {/* Header */}
@@ -213,119 +220,143 @@ const Index = () => {
               Opisovač Displeje
             </h1>
           </div>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => setDarkMode(!darkMode)}
-            className="h-8 w-8"
-          >
-            {darkMode ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-          </Button>
+          <div className="flex items-center gap-1">
+            <Link to="/about">
+              <Button variant="ghost" size="icon" className="h-8 w-8" title="O aplikaci">
+                <Info className="h-4 w-4" />
+              </Button>
+            </Link>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setDarkMode(!darkMode)}
+              className="h-8 w-8"
+            >
+              {darkMode ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+            </Button>
+            {user && (
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={signOut}
+                className="h-8 w-8"
+                title="Odhlásit se"
+              >
+                <LogOut className="h-4 w-4" />
+              </Button>
+            )}
+          </div>
         </div>
       </header>
 
       {/* Main */}
       <main className="container flex-1 space-y-4 py-4">
-        {/* Camera */}
-        <CameraPreview videoRef={videoRef} onSnapshot={() => null} />
+        {!user ? (
+          <LandingHero />
+        ) : (
+          <>
+            {/* Camera */}
+            <CameraPreview videoRef={videoRef} onSnapshot={() => null} />
 
-        {/* Controls */}
-        <div className="flex gap-2">
-          {!running && !calibrating ? (
-            <Button onClick={startSampling} className="flex-1 gap-2">
-              <Play className="h-4 w-4" />
-              Start
-            </Button>
-          ) : (
-            <Button onClick={stopSampling} variant="destructive" className="flex-1 gap-2" disabled={calibrating}>
-              <Square className="h-4 w-4" />
-              Stop
-            </Button>
-          )}
+            {/* Controls */}
+            <div className="flex gap-2">
+              {!running && !calibrating ? (
+                <Button onClick={startSampling} className="flex-1 gap-2">
+                  <Play className="h-4 w-4" />
+                  Start
+                </Button>
+              ) : (
+                <Button onClick={stopSampling} variant="destructive" className="flex-1 gap-2" disabled={calibrating}>
+                  <Square className="h-4 w-4" />
+                  Stop
+                </Button>
+              )}
 
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={() => exportToCsv(rows, columns)}
-            disabled={rows.length === 0}
-          >
-            <Download className="h-4 w-4" />
-          </Button>
-
-          <AlertDialog>
-            <AlertDialogTrigger asChild>
               <Button
                 variant="outline"
                 size="icon"
-                disabled={rows.length === 0 || running}
+                onClick={() => exportToCsv(rows, columns)}
+                disabled={rows.length === 0}
               >
-                <Trash2 className="h-4 w-4" />
+                <Download className="h-4 w-4" />
               </Button>
-            </AlertDialogTrigger>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>Smazat všechna data?</AlertDialogTitle>
-                <AlertDialogDescription>
-                  Tato akce je nevratná. Všechna naměřená data budou ztracena.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel>Zrušit</AlertDialogCancel>
-                <AlertDialogAction onClick={() => setRows([])}>
-                  Smazat
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
-        </div>
 
-        {/* Status indicator */}
-        {(calibrating || running || processing) && (
-          <div className="flex items-center gap-2 text-xs text-primary">
-            <div className="h-2 w-2 animate-pulse rounded-full bg-primary" />
-            <span className="font-mono">
-              {calibrating
-                ? "Kalibrace – AI analyzuje displej..."
-                : running
-                  ? `Měření probíhá... (${rows.length} záznamů)`
-                  : ""}
-              {processing && !calibrating && " • AI zpracovává snímek..."}
-            </span>
-          </div>
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    disabled={rows.length === 0 || running}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Smazat všechna data?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      Tato akce je nevratná. Všechna naměřená data budou ztracena.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Zrušit</AlertDialogCancel>
+                    <AlertDialogAction onClick={() => setRows([])}>
+                      Smazat
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            </div>
+
+            {/* Status indicator */}
+            {(calibrating || running || processing) && (
+              <div className="flex items-center gap-2 text-xs text-primary">
+                <div className="h-2 w-2 animate-pulse rounded-full bg-primary" />
+                <span className="font-mono">
+                  {calibrating
+                    ? "Kalibrace – AI analyzuje displej..."
+                    : running
+                      ? `Měření probíhá... (${rows.length} záznamů)`
+                      : ""}
+                  {processing && !calibrating && " • AI zpracovává snímek..."}
+                </span>
+              </div>
+            )}
+
+            {/* Last raw text from AI */}
+            {lastRawText && (
+              <div className="rounded-md border border-border bg-muted p-3">
+                <p className="mb-1 text-xs font-medium text-muted-foreground">Rozpoznaný text (AI)</p>
+                <p className="font-mono text-sm text-foreground">{lastRawText}</p>
+              </div>
+            )}
+
+            {/* Chart toggle */}
+            <div className="flex items-center gap-2">
+              <Switch id="chart-toggle" checked={showChart} onCheckedChange={setShowChart} />
+              <Label htmlFor="chart-toggle" className="flex cursor-pointer items-center gap-1.5 text-sm">
+                <LineChart className="h-4 w-4" />
+                Zobrazit graf
+              </Label>
+            </div>
+
+            {showChart && <DataChart rows={rows} columns={columns} />}
+
+            {/* Config */}
+            <SamplingConfig
+              columns={columns}
+              onColumnsChange={setColumns}
+              intervalSec={intervalSec}
+              onIntervalChange={setIntervalSec}
+              durationMin={durationMin}
+              onDurationChange={setDurationMin}
+              disabled={running}
+            />
+
+            {/* Data Table */}
+            <DataTable rows={rows} columns={columns} />
+          </>
         )}
-
-        {/* Last raw text from AI */}
-        {lastRawText && (
-          <div className="rounded-md border border-border bg-muted p-3">
-            <p className="mb-1 text-xs font-medium text-muted-foreground">Rozpoznaný text (AI)</p>
-            <p className="font-mono text-sm text-foreground">{lastRawText}</p>
-          </div>
-        )}
-
-        {/* Chart toggle */}
-        <div className="flex items-center gap-2">
-          <Switch id="chart-toggle" checked={showChart} onCheckedChange={setShowChart} />
-          <Label htmlFor="chart-toggle" className="flex cursor-pointer items-center gap-1.5 text-sm">
-            <LineChart className="h-4 w-4" />
-            Zobrazit graf
-          </Label>
-        </div>
-
-        {showChart && <DataChart rows={rows} columns={columns} />}
-
-        {/* Config */}
-        <SamplingConfig
-          columns={columns}
-          onColumnsChange={setColumns}
-          intervalSec={intervalSec}
-          onIntervalChange={setIntervalSec}
-          durationMin={durationMin}
-          onDurationChange={setDurationMin}
-          disabled={running}
-        />
-
-        {/* Data Table */}
-        <DataTable rows={rows} columns={columns} />
       </main>
     </div>
   );
