@@ -20,7 +20,8 @@ export function exportToCsv(rows: DataRow[], columns: ColumnConfig[]): void {
     const ts = format(row.timestamp, "yyyy-MM-dd HH:mm:ss");
     const values = columns.map((c) => row.values[c.id]?.value ?? "");
     const units = columns.map((c) => row.values[c.id]?.unit ?? "");
-    csvRows.push([ts, ...values, ...units].join(","));
+    const rawText = `"${(row.rawText || "").replace(/"/g, '""')}"`;
+    csvRows.push([ts, ...values, ...units, rawText].join(","));
   }
 
   const blob = new Blob([csvRows.join("\n")], { type: "text/csv" });
