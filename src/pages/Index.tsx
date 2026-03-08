@@ -16,7 +16,10 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { Play, Square, Trash2, Download, Sun, Moon, Camera } from "lucide-react";
+import { Play, Square, Trash2, Download, Sun, Moon, Camera, LineChart } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
+import { DataChart } from "@/components/DataChart";
 import { useToast } from "@/hooks/use-toast";
 
 const Index = () => {
@@ -37,6 +40,7 @@ const Index = () => {
   const [durationMin, setDurationMin] = useState<number | null>(null);
   const [processing, setProcessing] = useState(false);
   const [lastRawText, setLastRawText] = useState<string>("");
+  const [showChart, setShowChart] = useState(false);
 
   // Keep ref in sync with state
   useEffect(() => {
@@ -297,6 +301,17 @@ const Index = () => {
             <p className="font-mono text-sm text-foreground">{lastRawText}</p>
           </div>
         )}
+
+        {/* Chart toggle */}
+        <div className="flex items-center gap-2">
+          <Switch id="chart-toggle" checked={showChart} onCheckedChange={setShowChart} />
+          <Label htmlFor="chart-toggle" className="flex cursor-pointer items-center gap-1.5 text-sm">
+            <LineChart className="h-4 w-4" />
+            Zobrazit graf
+          </Label>
+        </div>
+
+        {showChart && <DataChart rows={rows} columns={columns} />}
 
         {/* Config */}
         <SamplingConfig
