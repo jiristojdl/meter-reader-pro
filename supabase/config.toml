@@ -1,1 +1,4 @@
 project_id = "itoceaeaczwqjekyjlys"
+
+[functions.ai-ocr]
+verify_jwt = false
