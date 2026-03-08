@@ -28,6 +28,9 @@ export function DataTable({ rows, columns }: DataTableProps) {
                 {col.name}
               </TableHead>
             ))}
+            <TableHead className="font-mono text-xs text-muted-foreground">
+              Surová data
+            </TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
