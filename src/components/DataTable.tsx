@@ -50,6 +50,9 @@ export function DataTable({ rows, columns }: DataTableProps) {
                   </TableCell>
                 );
               })}
+              <TableCell className="max-w-[200px] truncate text-xs text-muted-foreground" title={row.rawText}>
+                {row.rawText || "—"}
+              </TableCell>
             </TableRow>
           ))}
         </TableBody>
