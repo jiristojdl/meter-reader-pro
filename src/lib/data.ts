@@ -13,7 +13,7 @@ export interface ColumnConfig {
 }
 
 export function exportToCsv(rows: DataRow[], columns: ColumnConfig[]): void {
-  const header = ["Timestamp", ...columns.map((c) => `${c.name} (Value)`), ...columns.map((c) => `${c.name} (Unit)`)];
+  const header = ["Timestamp", ...columns.map((c) => `${c.name} (Value)`), ...columns.map((c) => `${c.name} (Unit)`), "Raw Text"];
   const csvRows = [header.join(",")];
 
   for (const row of rows) {
