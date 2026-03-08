@@ -55,6 +55,24 @@ const Index = () => {
 
       setLastRawText(result.raw_text || "");
 
+      // Auto-create columns for extra readings detected by AI
+      const extraReadings = result.extra_readings || {};
+      const extraNames = Object.keys(extraReadings);
+      let currentColumns = columns;
+
+      if (extraNames.length > 0) {
+        const newCols: ColumnConfig[] = [];
+        for (const name of extraNames) {
+          if (!currentColumns.some((c) => c.name === name)) {
+            newCols.push({ id: crypto.randomUUID(), name });
+          }
+        }
+        if (newCols.length > 0) {
+          currentColumns = [...currentColumns, ...newCols];
+          setColumns(currentColumns);
+        }
+      }
+
       const newRow: DataRow = {
         id: crypto.randomUUID(),
         timestamp: new Date(),
@@ -62,8 +80,8 @@ const Index = () => {
       };
 
       // Map AI readings to columns by name
-      for (const col of columns) {
-        const reading = result.readings[col.name];
+      for (const col of currentColumns) {
+        const reading = result.readings[col.name] || extraReadings[col.name];
         if (reading) {
           newRow.values[col.id] = {
             value: reading.value,
@@ -143,37 +161,7 @@ const Index = () => {
         {/* Camera */}
         <CameraPreview videoRef={videoRef} onSnapshot={() => null} />
 
-        {/* Status indicator */}
-        {(running || processing) && (
-          <div className="flex items-center gap-2 text-xs text-primary">
-            <div className="h-2 w-2 animate-pulse rounded-full bg-primary" />
-            <span className="font-mono">
-              {running ? `Měření probíhá... (${rows.length} záznamů)` : ""}
-              {processing && " • AI zpracovává snímek..."}
-            </span>
-          </div>
-        )}
-
-        {/* Last raw text from AI */}
-        {lastRawText && (
-          <div className="rounded-md border border-border bg-surface p-3">
-            <p className="mb-1 text-xs font-medium text-muted-foreground">Rozpoznaný text (AI)</p>
-            <p className="font-mono text-sm text-foreground">{lastRawText}</p>
-          </div>
-        )}
-
-        {/* Config */}
-        <SamplingConfig
-          columns={columns}
-          onColumnsChange={setColumns}
-          intervalSec={intervalSec}
-          onIntervalChange={setIntervalSec}
-          durationMin={durationMin}
-          onDurationChange={setDurationMin}
-          disabled={running}
-        />
-
-        {/* Controls */}
+        {/* Controls - right below camera */}
         <div className="flex gap-2">
           {!running ? (
             <Button onClick={startSampling} className="flex-1 gap-2">
@@ -222,6 +210,36 @@ const Index = () => {
             </AlertDialogContent>
           </AlertDialog>
         </div>
+
+        {/* Status indicator */}
+        {(running || processing) && (
+          <div className="flex items-center gap-2 text-xs text-primary">
+            <div className="h-2 w-2 animate-pulse rounded-full bg-primary" />
+            <span className="font-mono">
+              {running ? `Měření probíhá... (${rows.length} záznamů)` : ""}
+              {processing && " • AI zpracovává snímek..."}
+            </span>
+          </div>
+        )}
+
+        {/* Last raw text from AI */}
+        {lastRawText && (
+          <div className="rounded-md border border-border bg-surface p-3">
+            <p className="mb-1 text-xs font-medium text-muted-foreground">Rozpoznaný text (AI)</p>
+            <p className="font-mono text-sm text-foreground">{lastRawText}</p>
+          </div>
+        )}
+
+        {/* Config */}
+        <SamplingConfig
+          columns={columns}
+          onColumnsChange={setColumns}
+          intervalSec={intervalSec}
+          onIntervalChange={setIntervalSec}
+          durationMin={durationMin}
+          onDurationChange={setDurationMin}
+          disabled={running}
+        />
 
         {/* Data Table */}
         <DataTable rows={rows} columns={columns} />

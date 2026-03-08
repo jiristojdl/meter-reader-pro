@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 
 export interface AiOcrResult {
   readings: Record<string, { value: string; unit: string }>;
+  extra_readings?: Record<string, { value: string; unit: string }>;
   raw_text: string;
 }
 
