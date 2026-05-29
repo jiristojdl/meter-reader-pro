@@ -1,0 +1,30 @@
+patterns:
+  - rule_name: hardcoded_api_key
+    substrings: ["sk-", "sk_live_", "AKIA", "AIza"]
+    reminder: "Hardcoded API key prefix detected. Load credentials from environment variables or Supabase secrets."
+
+  - rule_name: supabase_service_role_key
+    substrings: ["service_role"]
+    reminder: "The Supabase service role key bypasses RLS. Never use it in client-side code."
+
+  - rule_name: dangerous_inner_html
+    substrings: ["dangerouslySetInnerHTML", "innerHTML =", "innerHTML=", "document.write"]
+    reminder: "Direct DOM injection detected. Use React JSX rendering or sanitize content with DOMPurify."
+
+  - rule_name: eval_usage
+    substrings: ["eval(", "new Function("]
+    reminder: "Dynamic code execution is unsafe. Avoid eval() and new Function()."
+
+  - rule_name: unparameterized_query
+    regex: "\\.from\\(['\"]\\w+['\"]\\)\\.select\\(.*\\+.*\\)"
+    paths: ["**/src/**", "**/supabase/functions/**"]
+    reminder: "Possible string concatenation in Supabase query. Use parameterized filters (.eq(), .filter()) instead."
+
+  - rule_name: console_log_sensitive
+    regex: "console\\.log\\(.*(?:password|token|key|secret|auth).*\\)"
+    reminder: "Possible logging of sensitive data. Remove or redact before committing."
+
+  - rule_name: meter_value_unvalidated
+    regex: "parseInt\\(|parseFloat\\("
+    paths: ["**/src/**"]
+    reminder: "Parsed numeric input from user. Ensure the value is validated and within an acceptable range before use."
